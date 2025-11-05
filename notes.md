@@ -1,5 +1,3 @@
-This will be an hour tracking application.
-
 Implement user input, corrections, and a simple visual model.
 
 While user input will stay the same, the visual style will have options.
