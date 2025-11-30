@@ -1,6 +1,45 @@
-Implement user input, corrections, and a simple visual model.
+# Desired User Experience
+- Open the application
+- Create | Delete | Select | Close
+- Create
+    - Input Goal Hours
+    - Input name
+- Delete (displays projects [1] name1 -> [x] namex)
+    - Input number
+    - Require confirmation DELETE
+- Select (displays projects [1] name1 -> [x] namex)
+    - Input number
 
-While user input will stay the same, the visual style will have options.
+
+
+- User Inputs a number
+- Sees confirming visual
+
+EXPERIENCE
+- Select should be chosen by default
+- OR even better a menu like
+[create]
+[delete]
+[close]
+[1] project name
+[2] project name2
+
+
+# Function
+- The user can enter floats/fraction
+- The none whole number portion is saved and added to the next entry
+
+
+
+
+
+
+
+
+
+
+
+
 
 # Visual options
     1 # Bag fills from left to right top to bottom.
