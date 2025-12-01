@@ -1,7 +1,10 @@
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <limits>
 #include <string>
+#include <vector>
+
 
 enum class MenuState {
     MAIN,
@@ -9,24 +12,44 @@ enum class MenuState {
     CREATE_SIZE,
     DELETE_NAME,
     DELETE_CONFIRM,
+    PROJECT,
     EXIT
 };
 
+std::vector<std::string> build_project_list();
+void ensure_directory(std::filesystem::path folder_path);
 void display_menu();
 void display_path(MenuState state);
 MenuState create_project(std::string name, std::string size);
 MenuState delete_project(std::string name, std::string confirmation);
 
 int main(int argc, char *argv[]){
+    static const std::filesystem::path user_projects_path = "user_projects";
     MenuState state = MenuState::MAIN;
+
     std::string selection;
     std::string input;
     std::string name;
     std::string size;
     std::string confirmation;
+
+    std::vector<std::string> project_list = build_project_list();
     
 
-    // 
+    // Should be able to do setup tasks here.
+    // Create project directory on every boot if it doesn't exists
+    ensure_directory(user_projects_path);
+
+    // NEXT TIME: I'm working on getting the user projects list working
+        // Need to actually define the build_project_list()
+            // It might need to take in a filepath as a parameter
+            // Inside the filepath/dir look for the text file and open it in read mode.
+                // If it doesn't exist create it? and/or return an empty list.
+        // Also thinking about having a setup style function that only runs the first time the program opens.
+            // You would set a flag from 0 to 1 in a build data text file so that it doesn't run again.
+            // It would setup all this directory stuff.
+            // But then if a text file is deleted you would still want to have checks and balances that recreate them. So, maybe unnecessary.
+    // WHAT I REALIZED: Maybe use project class? Create objects? Haven't researched it yet tho.
 
 
 
@@ -57,6 +80,13 @@ int main(int argc, char *argv[]){
             state = MenuState::DELETE_NAME;
             continue;
         }
+        // if input is a project name OR number
+        for (int i = 0; i < project_list.size(); i++){
+            if (input == project_list[i]){
+                state = MenuState::PROJECT;
+                // Determine if projects have states
+            }
+        }
         // Perform Action based upon State
         switch (state) {
             case MenuState::MAIN:
@@ -67,7 +97,7 @@ int main(int argc, char *argv[]){
                 break;
             case MenuState::CREATE_SIZE:
                 size = input;
-                create_project(name, size);
+                state = create_project(name, size);
                 break;
             case MenuState::DELETE_NAME:
                 name = input;
@@ -85,10 +115,20 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
+void ensure_directory(std::filesystem::path folder_path){
+    if (!exists(folder_path)) {
+        std::filesystem::create_directory(folder_path);
+    }
+}
+
 MenuState create_project(std::string name, std::string size){
-    // Ensure name does not already exist
-    // Create the file
-    // Organize the data by Goal: and Current:
+    // Ensure name uniqueness?
+        // To know if this is important I need to decide whether or not the user can just type their "project name" as a reserved keyword and navigate to it.
+            // To decide, I need to know if I can create these reserved keywords at runtime.
+
+    
+
+
     std::cout << "Name: " << name << " Size: " << size << std::endl;
     return MenuState::MAIN;
 }
@@ -147,6 +187,9 @@ void display_path(MenuState state){
             example_path =  "[::::][main][delete][name][confirm y/n]";
             path =          "[::::][main][delete][name][";
             break;
+        case MenuState::PROJECT:
+            example_path =  "[::::][main][project][hours]";
+            path =          "[::::][main][project][";
         default:
             break;
 
