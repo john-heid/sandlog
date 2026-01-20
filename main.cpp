@@ -4,64 +4,103 @@
 #include <limits>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <thread>
+#include <tuple>
+#include <stdlib.h>
+#include <cctype> // isalphanumeric
 
+// Folder
+static const std::filesystem::path USER_PROJECTS = "user_projects";
+static const std::filesystem::path PROJECTS_ACTIVE = USER_PROJECTS / "projects_active";
+static const std::filesystem::path PROJECTS_ARCHIVE = USER_PROJECTS / "projects_archive";
+static const std::filesystem::path TEMPLATES = "templates";
+
+// Filenames
+static const std::string FILENAME_PROJECT_LIST = "project_list.txt";
+static const std::string FILENAME_TEMPLATE_100 = "template_100.txt";
+static const std::string FILENAME_TEMPLATE_400 = "template_400.txt";
+static const std::string FILENAME_TEMPLATE_MENU = "template_menu.txt";
 
 enum class MenuState {
     MAIN,
+    ARCHIVE,
     CREATE_NAME,
     CREATE_SIZE,
+    CREATE_UNIT,
+    CREATE_FROM_TEMPLATE,
     DELETE_NAME,
     DELETE_CONFIRM,
-    PROJECT,
+    PROJECT_ADD,
+    PROJECT_DISPLAY,
     EXIT
 };
 
-std::vector<std::string> build_project_list();
-void ensure_directory(std::filesystem::path folder_path);
-void display_menu();
+std::vector<std::string> build_project_list(MenuState curr_state);
+void ensure_directory();
+void write_templates();
+void display_menu(MenuState state, std::vector<std::string> project_list, const std::vector<std::vector<char>>& hourglass);
 void display_path(MenuState state);
-MenuState create_project(std::string name, std::string size);
+MenuState create_project(std::string name, std::string size, std::string unit);
 MenuState delete_project(std::string name, std::string confirmation);
+void write_hourglass(MenuState state, std::string name, std::vector<std::vector<char>>& hourglass);
+MenuState display_project(std::string name, std::string size);
+std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name);
+bool calculate_frame(std::vector<std::vector<char>>& hourglass, bool flag_dam);
+void remove_dam(std::vector<std::vector<char>>& hourglass);
+
+// Doing project_add state handling
+    // The display_menu(), will eventually need to receive a state or filename or something
+        // so that when a project is selected the display_menu() displays that projects hourglass/sandlog
+    // add_hours needs to receive parameters for the filename and the hours to be added
+    // The display path needs to have support for the PROJECT_ADD state.
+    // add_hours need to return a MenuState
+        // For now main probably.
+        // In the future, it will play the sand sim visual.
+
 
 int main(int argc, char *argv[]){
-    static const std::filesystem::path user_projects_path = "user_projects";
     MenuState state = MenuState::MAIN;
 
-    std::string selection;
     std::string input;
-    std::string name;
+    // Input is placed into these variables to save input across state when building an input package
+    std::string name = "start_value";
     std::string size;
     std::string confirmation;
+    std::string unit;
 
-    std::vector<std::string> project_list = build_project_list();
-    
-
-    // Should be able to do setup tasks here.
-    // Create project directory on every boot if it doesn't exists
-    ensure_directory(user_projects_path);
-
-    // NEXT TIME: I'm working on getting the user projects list working
-        // Need to actually define the build_project_list()
-            // It might need to take in a filepath as a parameter
-            // Inside the filepath/dir look for the text file and open it in read mode.
-                // If it doesn't exist create it? and/or return an empty list.
-        // Also thinking about having a setup style function that only runs the first time the program opens.
-            // You would set a flag from 0 to 1 in a build data text file so that it doesn't run again.
-            // It would setup all this directory stuff.
-            // But then if a text file is deleted you would still want to have checks and balances that recreate them. So, maybe unnecessary.
-    // WHAT I REALIZED: Maybe use project class? Create objects? Haven't researched it yet tho.
-
-
-
+    ensure_directory();
+    write_templates();
 
     while (state != MenuState::EXIT) {
+        std::vector<std::vector<char>> hourglass = read_hourglass(state, name);
+        std::vector<std::string> project_list = build_project_list(state);
+        if (state == MenuState::PROJECT_DISPLAY){
+            size_t sand_input = std::stoi(size);
+            size_t counter = 0;
+            bool flag_add_dam = false;
+            do {
+                if (counter == 0){
+                    // remove the dam.
+                    remove_dam(hourglass);
+                }
+                else if (counter == sand_input){
+                    // add the dam back in.
+                    flag_add_dam = true;
+                }
+                counter += 1;
+                system("cls");
+                display_menu(state, project_list, hourglass);
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            } while (calculate_frame(hourglass, flag_add_dam));
+            write_hourglass(state, name, hourglass);
+        }
+
         system("cls");
-        display_menu();
+        display_menu(state, project_list, hourglass); // This will need to take in state to determine whether archived or active projects are displayed
         display_path(state);
 
-
         std::getline(std::cin, input);
-        std::cout << "]" << std::endl;
 
         // Creating Global Commands
         if (input == "exit"){
@@ -80,16 +119,20 @@ int main(int argc, char *argv[]){
             state = MenuState::DELETE_NAME;
             continue;
         }
-        // if input is a project name OR number
-        for (int i = 0; i < project_list.size(); i++){
-            if (input == project_list[i]){
-                state = MenuState::PROJECT;
-                // Determine if projects have states
-            }
-        }
-        // Perform Action based upon State
+        // States and some local commands
         switch (state) {
             case MenuState::MAIN:
+                for (int i = 0; i < project_list.size(); i++){
+                    if (input + ".txt" == project_list[i]){
+                        name = input;
+                        state = MenuState::PROJECT_ADD;
+                        // Determine if projects have states
+                        // Pull this out of the switch statement?
+                        // Ideally yes, but no you can't switch from proj to proj directly, you have to use main.
+                        // We can't move this up one level because then if you try to delete, by typing in a name
+                            // it will just switch projects.
+                    }
+                }
                 break;
             case MenuState::CREATE_NAME:
                 name = input;
@@ -97,7 +140,11 @@ int main(int argc, char *argv[]){
                 break;
             case MenuState::CREATE_SIZE:
                 size = input;
-                state = create_project(name, size);
+                state = MenuState::CREATE_UNIT;
+                break;
+            case MenuState::CREATE_UNIT:
+                unit = input;
+                state = create_project(name, size, unit);
                 break;
             case MenuState::DELETE_NAME:
                 name = input;
@@ -107,6 +154,15 @@ int main(int argc, char *argv[]){
                 confirmation = input;
                 state = delete_project(name, confirmation);
                 break;
+            case MenuState::PROJECT_ADD:
+                size = input;
+                state = MenuState::PROJECT_DISPLAY;
+                break;
+            case MenuState::PROJECT_DISPLAY:
+                std::cout << "we made it to proj display ever?";
+                std::cin.get();
+                state = MenuState::MAIN;
+                break;
             default:
                 break;
         }
@@ -115,33 +171,201 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-void ensure_directory(std::filesystem::path folder_path){
-    if (!exists(folder_path)) {
-        std::filesystem::create_directory(folder_path);
+std::vector<std::string> build_project_list(MenuState curr_state){
+    std::filesystem::path state_dir;
+    if (curr_state == MenuState::ARCHIVE) {
+        state_dir = PROJECTS_ARCHIVE;
     }
+    else {
+        state_dir = PROJECTS_ACTIVE;
+    }
+    std::filesystem::path target_dir = state_dir;
+    std::vector<std::string> project_list;
+    for (const auto& entry : std::filesystem::directory_iterator{target_dir}) {
+        project_list.push_back(entry.path().filename().string());
+    }
+    return project_list;
 }
 
-MenuState create_project(std::string name, std::string size){
-    // Ensure name uniqueness?
-        // To know if this is important I need to decide whether or not the user can just type their "project name" as a reserved keyword and navigate to it.
-            // To decide, I need to know if I can create these reserved keywords at runtime.
+void ensure_directory(){
+    if (!exists(USER_PROJECTS)) {
+        std::filesystem::create_directory(USER_PROJECTS);
+        std::filesystem::create_directory(PROJECTS_ACTIVE);
+        std::filesystem::create_directory(PROJECTS_ARCHIVE);
+    }
+    if (!exists(TEMPLATES)) {
+        std::filesystem::create_directory(TEMPLATES);
+    }
 
-    
+}
+
+void write_templates(){
+    std::vector<std::string> hourglass_template = {
+        "| |===================| |",
+        " \\\\###################//",
+        "  \\\\#################//",
+        "   \\\\###############//",
+        "    \\\\#############//",
+        "     \\\\###########//",
+        "      \\\\#########//",
+        "       \\\\#######//",
+        "        \\\\#####//",
+        "         \\\\###//~n",
+        "          \\\\#// ~u",
+        "           )V(",
+        "          // \\\\",
+        "         //   \\\\",
+        "        //     \\\\",
+        "       //       \\\\",
+        "      //         \\\\",
+        "     //           \\\\",
+        "    //             \\\\",
+        "   //               \\\\",
+        "  //                 \\\\",
+        " //                   \\\\",
+        "| |```````````````````| |"         
+    };
+    std::ofstream outfile(TEMPLATES / FILENAME_TEMPLATE_100);
+    if (outfile.is_open()) {
+        for (const std::string& row : hourglass_template) {
+            outfile << row << '\n';
+        }
+    }
+    outfile.close();
+    hourglass_template = {
+        "| |========================================| |",
+        " \\\\#######################################//",//39
+        "  \\\\#####################################//",
+        "   \\\\###################################//",
+        "    \\\\#################################//",
+        "     \\\\###############################//",
+        "      \\\\#############################//",
+        "       \\\\###########################//",
+        "        \\\\#########################//",
+        "         \\\\#######################//",
+        "          \\\\#####################//",
+        "           \\\\###################//",//19
+        "            \\\\#################//",
+        "             \\\\###############//",
+        "              \\\\#############//",
+        "               \\\\###########//",
+        "                \\\\#########//",
+        "                 \\\\#######//",
+        "                  \\\\#####//",
+        "                   \\\\###//~n",
+        "                    \\\\#// ~u",
+        "                     )V(",
+        "                    // \\\\",
+        "                   //   \\\\",
+        "                  //     \\\\",
+        "                 //       \\\\",
+        "                //         \\\\",
+        "               //           \\\\",
+        "              //             \\\\",
+        "             //               \\\\",
+        "            //                 \\\\",
+        "           //                   \\\\",
+        "          //                     \\\\",
+        "         //                       \\\\",
+        "        //                         \\\\",
+        "       //                           \\\\",
+        "      //                             \\\\",
+        "     //                               \\\\",
+        "    //                                 \\\\",
+        "   //                                   \\\\",
+        "  //                                     \\\\",
+        " //                                       \\\\",
+        "| |```````````````````````````````````````| |"         
+    };
+    outfile.open(TEMPLATES / FILENAME_TEMPLATE_400);
+    if (outfile.is_open()) {
+        for (const std::string& row : hourglass_template) {
+            outfile << row << '\n';
+        }
+    }
+
+    outfile.close();
+    std::vector<std::string> menu_template = {
+        "#####~ SandLog ~#####",
+        "#####################",
+        "[create]             ",
+        "[delete]             ",
+        "[exit]               ",
+        "#####################"
+    };
+
+    outfile.open(TEMPLATES / FILENAME_TEMPLATE_MENU);
+    if (outfile.is_open()) {
+        for (const std::string& row : menu_template) {
+            outfile << row << '\n';
+        }
+    }
+    outfile.close();
+}
+
+MenuState create_project(std::string name, std::string size, std::string unit){
+    // input cleaning here
+    // NAME
+    // STILL NEED TO MAKE SURE NAME IS UNIQUE
+    if (name.length() > 35){
+        return MenuState::CREATE_NAME;
+    }
+    // std::string invalid_inputs = "/\\.<>\":()[]{}% ";
+    // for (char c : name){
+    //     size_t pos = invalid_inputs.find(c);
+    //     if (pos == std::string::npos){
+    //         return MenuState::CREATE_NAME;
+    //     }
+    // }
+    // SIZE
+    if (size != "100" && size != "400"){
+        return MenuState::CREATE_SIZE;
+    }
+    // UNIT
+    if (unit.length() > 35){
+        return MenuState::CREATE_UNIT;
+    }
 
 
-    std::cout << "Name: " << name << " Size: " << size << std::endl;
-    return MenuState::MAIN;
+    std::string template_file;
+    if (size == "100"){
+        template_file = FILENAME_TEMPLATE_100;
+    }
+    else if (size == "400"){
+        template_file = FILENAME_TEMPLATE_400;
+    }
+
+    std::vector<std::vector<char>> new_hourglass = read_hourglass(MenuState::CREATE_FROM_TEMPLATE, template_file);
+    for (size_t i = 0; i < new_hourglass.size(); i++){
+        for (size_t j = 0; j < new_hourglass[i].size(); j++){
+            if (new_hourglass[i][j] == 'n'){
+                // name location
+                for (char c : name){
+                    new_hourglass[i].push_back(c);
+                }
+                break;
+            }
+            if (new_hourglass[i][j] == 'u'){
+                // unit location
+                for (char c : unit){
+                    new_hourglass[i].push_back(c);
+                }
+                break;
+            }
+        }
+    }
+
+    write_hourglass(MenuState::MAIN, name, new_hourglass);
+
+    return MenuState::MAIN; // could be cool to return the menustate corresponding with the creating project.
+    // Which now would be PROJECT_ADD I think.
 }
 
 MenuState delete_project(std::string name, std::string confirmation){
-    // Delete project should have a return
-    // The return value should be the state the menu should be in depending on what the funciton does
-        // If the the value is y or n
-            // return the main menu state
-        // if the value is giberish
-            // return the confirmation state to allow it to be asked again.
+    std::string file = name + ".txt";
     if (confirmation == "y"){
         std::cout << "This counted as YES" << std::endl;
+        std::filesystem::remove(PROJECTS_ACTIVE / file);
         return MenuState::MAIN;
     }
     else if (confirmation == "n"){
@@ -152,16 +376,79 @@ MenuState delete_project(std::string name, std::string confirmation){
     }
 }
 
-void display_menu(){
-    std::cout << "#####~ SandLog ~#####" << std::endl;
-    std::cout << "#####################" << std::endl;
-    std::cout << "[create]" << std::endl;
-    std::cout << "[delete]" << std::endl;
-    std::cout << "[exit]" << std::endl;
-    std::cout << "#####################" << std::endl;
-    std::cout << "[1] projects go here" << std::endl << std::endl;
+void write_hourglass(MenuState state, std::string name, std::vector<std::vector<char>>& hourglass) {
+    std::ofstream outfile;
+    name = name + ".txt";
+    if (state == MenuState::ARCHIVE){
+        outfile.open(PROJECTS_ARCHIVE / name);
+    }
+    else{
+        outfile.open(PROJECTS_ACTIVE / name);
+    }
+
+    if (outfile.is_open()) {
+        for (const auto& row : hourglass) {
+            for (char c : row){
+                outfile << c;
+            }
+            outfile << '\n';
+        }
+    }
+    outfile.close();
 }
 
+void display_menu(MenuState state, std::vector<std::string> project_list, const std::vector<std::vector<char>>& hourglass){
+    std::ifstream infile;
+    // Build menu+projects list
+    size_t biggest_length = 0;
+    std::vector<std::string> menu;
+    infile.open(TEMPLATES / FILENAME_TEMPLATE_MENU);
+    if (infile.is_open()) {
+        std::string row;
+        while (std::getline(infile, row)) {
+            menu.push_back(row);
+            if (row.length() > biggest_length){
+                biggest_length = row.length();
+            }
+        }
+        for (std::string proj : project_list){
+            menu.push_back(proj);
+            if (proj.length() > biggest_length){
+                biggest_length = proj.length();
+            }
+        }
+    }
+    
+    // Output the display         // For each row it needs menu + offset + project
+    size_t num_rows = std::max(menu.size(), hourglass.size());
+    for (size_t i = 0; i < num_rows; i++){
+        // Menu
+        size_t padding;
+        if (i < menu.size()){
+            std::cout << menu[i];
+            padding = biggest_length - menu[i].length();
+        }
+        else{
+            padding = biggest_length;
+        }
+
+        // Padding + constant offset
+        size_t offset = 10;
+        size_t total_padding_offset = padding + offset;
+        std::cout << std::string(total_padding_offset, ' ');
+
+        // Project
+        if (i < hourglass.size()){
+            std::string buffer;
+            const auto& row = hourglass[i];
+            buffer.append(row.begin(), row.end());
+            std::cout << buffer;
+        }
+        std::cout << '\n';
+    }
+}
+
+// add archive state path
 void display_path(MenuState state){
     std::string example_path;
     std::string path;
@@ -179,6 +466,10 @@ void display_path(MenuState state){
             example_path =  "[::::][main][create][name][size]";
             path =          "[::::][main][create][name][";
             break;
+        case MenuState::CREATE_UNIT:
+            example_path =  "[::::][main][create][name][size][hours/days?]";
+            path =          "[::::][main][create][name][size][";
+            break;
         case MenuState::DELETE_NAME:
             example_path =  "[::::][main][delete][name]";
             path =          "[::::][main][delete][";
@@ -187,7 +478,7 @@ void display_path(MenuState state){
             example_path =  "[::::][main][delete][name][confirm y/n]";
             path =          "[::::][main][delete][name][";
             break;
-        case MenuState::PROJECT:
+        case MenuState::PROJECT_ADD:
             example_path =  "[::::][main][project][hours]";
             path =          "[::::][main][project][";
         default:
@@ -198,21 +489,153 @@ void display_path(MenuState state){
     std::cout << path;
 }
 
+MenuState display_project(std::string name, std::string size){         
+    return MenuState::MAIN;
+}
+
+std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name){
+    std::vector<std::vector<char>> project;
+    std::ifstream infile;
+    if (name == "start_value"){
+        infile.open("templates/template_100.txt");
+    }
+    else{
+        if (state == MenuState::ARCHIVE){
+            name = name + ".txt";
+            infile.open(PROJECTS_ARCHIVE / name);
+        }
+        else if (state == MenuState::CREATE_FROM_TEMPLATE){
+            infile.open(TEMPLATES / name);
+
+        }
+        else{
+            name = name + ".txt";
+            infile.open(PROJECTS_ACTIVE / name);
+        }
+    }    
+    if (infile.is_open()) {
+        std::string row;
+        while (std::getline(infile, row)) {
+            std::vector<char> temp;
+            for (char val : row){
+                temp.push_back(val);
+            }
+            project.push_back(temp);
+        }
+    }
+    infile.close();
+    return project;
+}
 
 
+bool calculate_frame(std::vector<std::vector<char>>& hourglass, bool flag_dam){
+    bool something_moved = false;
+    int numrows = static_cast<int>(hourglass.size()) -1;
+    
+    int dam_row;
+    int dam_column;
+    if (flag_dam == true){
+        for (int i = numrows; i >= 0; i--){
+            int j = 0;
+            for (char c : hourglass[i]){
+                if (c == '('){
+                    dam_row = i;
+                    dam_column = j-1;
+                    break;
+                }
+                j++;
+            }
+        }
+    }
+    for (int i = numrows; i >= 0; i--){
+        std::vector<std::tuple<std::string, int, int>> sand_indices;
+        for (size_t j = 0; j < hourglass[i].size(); j++){
+            if (hourglass[i][j] == '#'){
+                if (i+1 <= numrows){
+                    int downleft = j-1;
+                    int downright = j+1;
+                    // directly beneath empty priority
+                    if (hourglass[i+1][j] == ' '){
+                        std::tuple<std::string, int, int> myTuple("down", i, j);
+                        sand_indices.push_back(myTuple);
+                    }
+                    // diagonal checks
+                    else if (hourglass[i+1][downleft] == ' '){
+                        std::tuple<std::string, int, int> myTuple("downleft", i, j);
+                        sand_indices.push_back(myTuple);
+                    }
+                    else if (hourglass[i+1][downright] == ' '){
+                        std::tuple<std::string, int , int> myTuple("downright", i, j);
+                        sand_indices.push_back(myTuple);
+                    }
+                }
+            }
+            // If im on the final iteration of the row
+            // Also this is where the changes actually get made.
+            if (j+1 >= hourglass[i].size()){
+                // Look through
+                for (size_t k = 0; k < sand_indices.size(); k++){
+                    if (std::get<0>(sand_indices[k]) == "down"){
+                        if (flag_dam == true && std::get<1>(sand_indices[k]) == dam_row && std::get<2>(sand_indices[k]) == dam_column){
+                            hourglass[std::get<1>(sand_indices[k])][std::get<2>(sand_indices[k])] = 'V';
+                        }
+                        else{
+                            hourglass[std::get<1>(sand_indices[k])][std::get<2>(sand_indices[k])] = ' ';
+                        }
+                        hourglass[std::get<1>(sand_indices[k]) + 1][std::get<2>(sand_indices[k])] = '#';
+                        something_moved = true;
+                        break;
+                    }
+                    else if (k + 1 >= sand_indices.size() -1){
+                        int rand_choice = std::rand() % sand_indices.size();
+                        if (std::get<0>(sand_indices[rand_choice]) == "downleft"){
+                            hourglass[std::get<1>(sand_indices[rand_choice])][std::get<2>(sand_indices[rand_choice])] = ' ';
+                            hourglass[std::get<1>(sand_indices[rand_choice]) + 1][std::get<2>(sand_indices[rand_choice]) - 1] = '#';
+                            something_moved = true;
+                            break;
+                        }
+                        else if (std::get<0>(sand_indices[rand_choice]) == "downright"){
+                            hourglass[std::get<1>(sand_indices[rand_choice])][std::get<2>(sand_indices[rand_choice])] = ' ';
+                            hourglass[std::get<1>(sand_indices[rand_choice]) + 1][std::get<2>(sand_indices[rand_choice]) + 1] = '#';
+                            something_moved = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (something_moved == true){
+        return true;
+    }
+    else {
+        return false;
+    }
+}
 
-
-// The infile needs to be a variable
-
-
-
-
-// User Input
-// Add user Input
-// Write to file
-// 
-
-
-// Main
-    // User Input
-    // Passes user Input Value To the Simulator
+void remove_dam(std::vector<std::vector<char>>& hourglass){
+    int numrows = static_cast<int>(hourglass.size()) -1;
+    int dam_row;
+    int dam_column;
+    for (int i = numrows; i >= 0; i--){
+        int j = 0;
+        for (char c : hourglass[i]){
+            if (c == '('){
+                if (hourglass[i][j-1] == 'V'){
+                    dam_row = i;
+                    dam_column = j-1;
+                    hourglass[dam_row][dam_column] = ' ';
+                    break;
+                }
+                else if (hourglass[i][j-1] == ' '){
+                    dam_row = i;
+                    dam_column = j-1;
+                    hourglass[dam_row][dam_column] = 'V';
+                    break;
+                }
+                // else if # ? might need to return a flag or something
+            }
+            j++;
+        }
+    }
+}
