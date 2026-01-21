@@ -11,9 +11,9 @@
 #include <cctype> // isalphanumeric
 
 // Folder
-static const std::filesystem::path USER_PROJECTS = "user_projects";
-static const std::filesystem::path PROJECTS_ACTIVE = USER_PROJECTS / "projects_active";
-static const std::filesystem::path PROJECTS_ARCHIVE = USER_PROJECTS / "projects_archive";
+static const std::filesystem::path USER_DATA = "data";
+static const std::filesystem::path PROJECTS_ACTIVE = USER_DATA / "projects_active";
+static const std::filesystem::path PROJECTS_ARCHIVE = USER_DATA / "projects_archive";
 static const std::filesystem::path TEMPLATES = "templates";
 
 // Filenames
@@ -24,7 +24,9 @@ static const std::string FILENAME_TEMPLATE_MENU = "template_menu.txt";
 
 enum class MenuState {
     MAIN,
-    ARCHIVE,
+    ARCHIVE_NAME,
+    ARCHIVE_CONFIRM,
+    ARCHIVE_DISPLAY,
     CREATE_NAME,
     CREATE_SIZE,
     CREATE_UNIT,
@@ -43,27 +45,19 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
 void display_path(MenuState state);
 MenuState create_project(std::string name, std::string size, std::string unit);
 MenuState delete_project(std::string name, std::string confirmation);
+MenuState archive_project(std::string name, std::string confirmation);
 void write_hourglass(MenuState state, std::string name, std::vector<std::vector<char>>& hourglass);
-MenuState display_project(std::string name, std::string size);
 std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name);
 bool calculate_frame(std::vector<std::vector<char>>& hourglass, bool flag_dam);
 void remove_dam(std::vector<std::vector<char>>& hourglass);
+MenuState add_hours(std::string size);
 
-// Doing project_add state handling
-    // The display_menu(), will eventually need to receive a state or filename or something
-        // so that when a project is selected the display_menu() displays that projects hourglass/sandlog
-    // add_hours needs to receive parameters for the filename and the hours to be added
-    // The display path needs to have support for the PROJECT_ADD state.
-    // add_hours need to return a MenuState
-        // For now main probably.
-        // In the future, it will play the sand sim visual.
 
 
 int main(int argc, char *argv[]){
     MenuState state = MenuState::MAIN;
 
     std::string input;
-    // Input is placed into these variables to save input across state when building an input package
     std::string name = "start_value";
     std::string size;
     std::string confirmation;
@@ -74,6 +68,9 @@ int main(int argc, char *argv[]){
 
     while (state != MenuState::EXIT) {
         std::vector<std::vector<char>> hourglass = read_hourglass(state, name);
+        if (hourglass.size() == 0){
+            hourglass = read_hourglass(state, "start_value");
+        }
         std::vector<std::string> project_list = build_project_list(state);
         if (state == MenuState::PROJECT_DISPLAY){
             size_t sand_input = std::stoi(size);
@@ -94,10 +91,11 @@ int main(int argc, char *argv[]){
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
             } while (calculate_frame(hourglass, flag_add_dam));
             write_hourglass(state, name, hourglass);
+            state = MenuState::MAIN;
         }
 
         system("cls");
-        display_menu(state, project_list, hourglass); // This will need to take in state to determine whether archived or active projects are displayed
+        display_menu(state, project_list, hourglass);
         display_path(state);
 
         std::getline(std::cin, input);
@@ -119,20 +117,48 @@ int main(int argc, char *argv[]){
             state = MenuState::DELETE_NAME;
             continue;
         }
+        if (input == "archive"){
+            state = MenuState::ARCHIVE_NAME;
+            continue;
+        }
+        if (state != MenuState::DELETE_NAME && state != MenuState::ARCHIVE_NAME && state != MenuState::ARCHIVE_CONFIRM){
+            bool continue_flag = false;
+            for (int i = 0; i < project_list.size(); i++){
+                if (input + ".txt" == project_list[i]){
+                    name = input;
+                    state = MenuState::PROJECT_ADD;
+                    continue_flag = true;
+                }
+            }
+            if (continue_flag == true){
+                continue;
+            }
+        }
+        else if (state == MenuState::ARCHIVE_NAME || state == MenuState::ARCHIVE_DISPLAY){
+            bool continue_flag = false;
+            for (int i = 0; i < project_list.size(); i++){
+                if (input + ".txt" == project_list[i]){
+                    name = input;
+                    state = MenuState::ARCHIVE_NAME;
+                    continue_flag = true;
+                }
+            }
+            if (continue_flag == true){
+                continue;
+            }
+
+        }
         // States and some local commands
         switch (state) {
             case MenuState::MAIN:
-                for (int i = 0; i < project_list.size(); i++){
-                    if (input + ".txt" == project_list[i]){
-                        name = input;
-                        state = MenuState::PROJECT_ADD;
-                        // Determine if projects have states
-                        // Pull this out of the switch statement?
-                        // Ideally yes, but no you can't switch from proj to proj directly, you have to use main.
-                        // We can't move this up one level because then if you try to delete, by typing in a name
-                            // it will just switch projects.
-                    }
-                }
+                break;
+            case MenuState::ARCHIVE_NAME:
+                name = input;
+                state = MenuState::ARCHIVE_CONFIRM;
+                break;
+            case MenuState::ARCHIVE_CONFIRM:
+                confirmation = input;
+                state = archive_project(name, confirmation);
                 break;
             case MenuState::CREATE_NAME:
                 name = input;
@@ -156,12 +182,7 @@ int main(int argc, char *argv[]){
                 break;
             case MenuState::PROJECT_ADD:
                 size = input;
-                state = MenuState::PROJECT_DISPLAY;
-                break;
-            case MenuState::PROJECT_DISPLAY:
-                std::cout << "we made it to proj display ever?";
-                std::cin.get();
-                state = MenuState::MAIN;
+                state = add_hours(size);
                 break;
             default:
                 break;
@@ -173,7 +194,7 @@ int main(int argc, char *argv[]){
 
 std::vector<std::string> build_project_list(MenuState curr_state){
     std::filesystem::path state_dir;
-    if (curr_state == MenuState::ARCHIVE) {
+    if (curr_state == MenuState::ARCHIVE_NAME || curr_state == MenuState::ARCHIVE_CONFIRM) {
         state_dir = PROJECTS_ARCHIVE;
     }
     else {
@@ -188,8 +209,8 @@ std::vector<std::string> build_project_list(MenuState curr_state){
 }
 
 void ensure_directory(){
-    if (!exists(USER_PROJECTS)) {
-        std::filesystem::create_directory(USER_PROJECTS);
+    if (!exists(USER_DATA)) {
+        std::filesystem::create_directory(USER_DATA);
         std::filesystem::create_directory(PROJECTS_ACTIVE);
         std::filesystem::create_directory(PROJECTS_ARCHIVE);
     }
@@ -210,10 +231,10 @@ void write_templates(){
         "      \\\\#########//",
         "       \\\\#######//",
         "        \\\\#####//",
-        "         \\\\###//~n",
-        "          \\\\#// ~u",
-        "           )V(",
-        "          // \\\\",
+        "         \\\\###//",
+        "          \\\\#//",
+        "           )V(~n",
+        "          // \\\\~u",
         "         //   \\\\",
         "        //     \\\\",
         "       //       \\\\",
@@ -252,10 +273,10 @@ void write_templates(){
         "                \\\\#########//",
         "                 \\\\#######//",
         "                  \\\\#####//",
-        "                   \\\\###//~n",
-        "                    \\\\#// ~u",
-        "                     )V(",
-        "                    // \\\\",
+        "                   \\\\###//",
+        "                    \\\\#//",
+        "                     )V(~n",
+        "                    // \\\\~u",
         "                   //   \\\\",
         "                  //     \\\\",
         "                 //       \\\\",
@@ -289,6 +310,7 @@ void write_templates(){
         "#####~ SandLog ~#####",
         "#####################",
         "[create]             ",
+        "[archive]            ",
         "[delete]             ",
         "[exit]               ",
         "#####################"
@@ -307,16 +329,32 @@ MenuState create_project(std::string name, std::string size, std::string unit){
     // input cleaning here
     // NAME
     // STILL NEED TO MAKE SURE NAME IS UNIQUE
+    std::vector<std::string> active_project_list = build_project_list(MenuState::MAIN);
+    for (std::string existing_name : active_project_list){
+        if (name + ".txt" == existing_name){
+            return MenuState::CREATE_NAME;
+            // This can never happen tho since if the name is typed it jumps to that project
+        }
+    }
+    std::vector<std::string> archive_project_list = build_project_list(MenuState::ARCHIVE_NAME);
+    for (std::string existing_name : archive_project_list){
+        if (name + ".txt" == existing_name){
+            return MenuState::CREATE_NAME;
+        }
+    }
+
+
+
+
     if (name.length() > 35){
         return MenuState::CREATE_NAME;
     }
-    // std::string invalid_inputs = "/\\.<>\":()[]{}% ";
-    // for (char c : name){
-    //     size_t pos = invalid_inputs.find(c);
-    //     if (pos == std::string::npos){
-    //         return MenuState::CREATE_NAME;
-    //     }
-    // }
+    std::string invalid_inputs = "/\\.<>\":()[]{}%&!@#$^*,?';|+=`~ ";
+    for (char c : name){
+        if (invalid_inputs.find(c) != std::string::npos){
+            return MenuState::CREATE_NAME;
+        }
+    }
     // SIZE
     if (size != "100" && size != "400"){
         return MenuState::CREATE_SIZE;
@@ -340,6 +378,7 @@ MenuState create_project(std::string name, std::string size, std::string unit){
         for (size_t j = 0; j < new_hourglass[i].size(); j++){
             if (new_hourglass[i][j] == 'n'){
                 // name location
+                new_hourglass[i].pop_back();
                 for (char c : name){
                     new_hourglass[i].push_back(c);
                 }
@@ -347,6 +386,7 @@ MenuState create_project(std::string name, std::string size, std::string unit){
             }
             if (new_hourglass[i][j] == 'u'){
                 // unit location
+                new_hourglass[i].pop_back();
                 for (char c : unit){
                     new_hourglass[i].push_back(c);
                 }
@@ -364,7 +404,6 @@ MenuState create_project(std::string name, std::string size, std::string unit){
 MenuState delete_project(std::string name, std::string confirmation){
     std::string file = name + ".txt";
     if (confirmation == "y"){
-        std::cout << "This counted as YES" << std::endl;
         std::filesystem::remove(PROJECTS_ACTIVE / file);
         return MenuState::MAIN;
     }
@@ -376,10 +415,31 @@ MenuState delete_project(std::string name, std::string confirmation){
     }
 }
 
+MenuState archive_project(std::string name, std::string confirmation){
+    std::string file = name + ".txt";
+    if (confirmation == "y"){
+        // Copy the file into the archive directory
+        try {
+            std::filesystem::copy_file(PROJECTS_ACTIVE / file, PROJECTS_ARCHIVE / file, std::filesystem::copy_options::none);
+            std::filesystem::remove(PROJECTS_ACTIVE / file);
+            return MenuState::MAIN;
+        }
+        catch (...){
+            return MenuState::ARCHIVE_NAME;
+        }
+    }
+    else if (confirmation == "n"){
+        return MenuState::MAIN;
+    }
+    else {
+        return MenuState::ARCHIVE_CONFIRM;
+    }
+}
+
 void write_hourglass(MenuState state, std::string name, std::vector<std::vector<char>>& hourglass) {
     std::ofstream outfile;
     name = name + ".txt";
-    if (state == MenuState::ARCHIVE){
+    if (state == MenuState::ARCHIVE_NAME){
         outfile.open(PROJECTS_ARCHIVE / name);
     }
     else{
@@ -421,6 +481,17 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     
     // Output the display         // For each row it needs menu + offset + project
     size_t num_rows = std::max(menu.size(), hourglass.size());
+    // Add the difference of rows as 'padding'  to the front of menu
+    int vertical_padding = hourglass.size() - menu.size();
+    if (vertical_padding < 0){
+        vertical_padding = -1 * vertical_padding;
+    }
+
+    // adds empty vertical elements in preparation to receive padding.
+    menu.insert(menu.begin(), vertical_padding, "");
+
+
+
     for (size_t i = 0; i < num_rows; i++){
         // Menu
         size_t padding;
@@ -433,7 +504,7 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
         }
 
         // Padding + constant offset
-        size_t offset = 10;
+        const size_t offset = 10;
         size_t total_padding_offset = padding + offset;
         std::cout << std::string(total_padding_offset, ' ');
 
@@ -448,7 +519,6 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     }
 }
 
-// add archive state path
 void display_path(MenuState state){
     std::string example_path;
     std::string path;
@@ -458,6 +528,17 @@ void display_path(MenuState state){
             example_path =  "[::::][main][choice]";
             path =          "[::::][main][";
             break;
+        case MenuState::ARCHIVE_NAME:
+            example_path =  "[::::][main][archive][name]";
+            path =          "[::::][main][archive][";
+            break;
+        case MenuState::ARCHIVE_CONFIRM:
+            example_path =  "[::::][main][archive][name][confirm y/n]";
+            path =          "[::::][main][archive][name][";
+            break;
+        case MenuState::ARCHIVE_DISPLAY:
+            example_path =  "[::::][main][archive][name]";
+            path =          "[::::][main][archive][";
         case MenuState::CREATE_NAME:
             example_path =  "[::::][main][create][name]";
             path =          "[::::][main][create][";
@@ -489,10 +570,6 @@ void display_path(MenuState state){
     std::cout << path;
 }
 
-MenuState display_project(std::string name, std::string size){         
-    return MenuState::MAIN;
-}
-
 std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name){
     std::vector<std::vector<char>> project;
     std::ifstream infile;
@@ -500,13 +577,15 @@ std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name)
         infile.open("templates/template_100.txt");
     }
     else{
-        if (state == MenuState::ARCHIVE){
+        if (state == MenuState::ARCHIVE_NAME || state == MenuState::ARCHIVE_DISPLAY){
             name = name + ".txt";
             infile.open(PROJECTS_ARCHIVE / name);
         }
         else if (state == MenuState::CREATE_FROM_TEMPLATE){
             infile.open(TEMPLATES / name);
-
+        }
+        else if (state == MenuState::CREATE_NAME || state == MenuState::CREATE_SIZE || state == MenuState::CREATE_UNIT){
+            infile.open("templates/template_100.txt");
         }
         else{
             name = name + ".txt";
@@ -638,4 +717,17 @@ void remove_dam(std::vector<std::vector<char>>& hourglass){
             j++;
         }
     }
+}
+
+MenuState add_hours(std::string size){
+    // look through the string 'size' for characters that are not 0-9. return
+    if (size.empty()){
+        return MenuState::PROJECT_ADD;
+    }
+    for (char c : size){
+        if (!std::isdigit(static_cast<unsigned char>(c))){
+            return MenuState::PROJECT_ADD;
+        }
+    }
+    return MenuState::PROJECT_DISPLAY;
 }

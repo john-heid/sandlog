@@ -1,2 +1,4 @@
-notes.md
-user_projects
+data/
+templates/
+.vscode/
+*.exe
