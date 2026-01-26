@@ -8,6 +8,7 @@ This was inspired by Steam, which tracks the hours of video game time a user has
 Requirements
 - Windows
 - C++ 17
+
 Compilation
 - g++ main.cpp -o sandlog
   
