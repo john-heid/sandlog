@@ -544,11 +544,11 @@ void display_path(MenuState state){
             path =          "[::::][main][create][";
             break;
         case MenuState::CREATE_SIZE:
-            example_path =  "[::::][main][create][name][size]";
+            example_path =  "[::::][main][create][name][size (100 or 400)]";
             path =          "[::::][main][create][name][";
             break;
         case MenuState::CREATE_UNIT:
-            example_path =  "[::::][main][create][name][size][hours/days?]";
+            example_path =  "[::::][main][create][name][size][unit name]";
             path =          "[::::][main][create][name][size][";
             break;
         case MenuState::DELETE_NAME:
@@ -560,7 +560,7 @@ void display_path(MenuState state){
             path =          "[::::][main][delete][name][";
             break;
         case MenuState::PROJECT_ADD:
-            example_path =  "[::::][main][project][hours]";
+            example_path =  "[::::][main][project][amount]";
             path =          "[::::][main][project][";
         default:
             break;
