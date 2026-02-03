@@ -42,7 +42,7 @@ std::vector<std::string> build_project_list(MenuState curr_state);
 void ensure_directory();
 void write_templates();
 void display_menu(MenuState state, std::vector<std::string> project_list, const std::vector<std::vector<char>>& hourglass);
-void display_path(MenuState state);
+void display_path(MenuState state, std::string name);
 MenuState create_project(std::string name, std::string size, std::string unit);
 MenuState delete_project(std::string name, std::string confirmation);
 MenuState archive_project(std::string name, std::string confirmation);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]){
 
         system("cls");
         display_menu(state, project_list, hourglass);
-        display_path(state);
+        display_path(state, name);
 
         std::getline(std::cin, input);
 
@@ -519,10 +519,14 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     }
 }
 
-void display_path(MenuState state){
+void display_path(MenuState state, std::string name){
+    
+    if (name == "startup value"){
+        name = "name";
+    }
     std::string example_path;
     std::string path;
-
+    
     switch (state) {
         case MenuState::MAIN:
             example_path =  "[::::][main][choice]";
@@ -533,8 +537,8 @@ void display_path(MenuState state){
             path =          "[::::][main][archive][";
             break;
         case MenuState::ARCHIVE_CONFIRM:
-            example_path =  "[::::][main][archive][name][confirm y/n]";
-            path =          "[::::][main][archive][name][";
+            example_path =  "[::::][main][archive]["+ name +"][confirm y/n]";
+            path =          "[::::][main][archive]["+ name +"][";
             break;
         case MenuState::ARCHIVE_DISPLAY:
             example_path =  "[::::][main][archive][name]";
@@ -544,24 +548,24 @@ void display_path(MenuState state){
             path =          "[::::][main][create][";
             break;
         case MenuState::CREATE_SIZE:
-            example_path =  "[::::][main][create][name][size (100 or 400)]";
-            path =          "[::::][main][create][name][";
+            example_path =  "[::::][main][create]["+ name +"][size (100 or 400)]";
+            path =          "[::::][main][create]["+ name +"][";
             break;
         case MenuState::CREATE_UNIT:
-            example_path =  "[::::][main][create][name][size][unit name]";
-            path =          "[::::][main][create][name][size][";
+            example_path =  "[::::][main][create]["+ name +"][size][unit name]";
+            path =          "[::::][main][create]["+ name +"][size][";
             break;
         case MenuState::DELETE_NAME:
             example_path =  "[::::][main][delete][name]";
             path =          "[::::][main][delete][";
             break;
         case MenuState::DELETE_CONFIRM:
-            example_path =  "[::::][main][delete][name][confirm y/n]";
-            path =          "[::::][main][delete][name][";
+            example_path =  "[::::][main][delete]["+ name +"][confirm y/n]";
+            path =          "[::::][main][delete]["+ name +"][";
             break;
         case MenuState::PROJECT_ADD:
-            example_path =  "[::::][main][project][amount]";
-            path =          "[::::][main][project][";
+            example_path =  "[::::][main]["+ name +"][amount]";
+            path =          "[::::][main]["+ name +"][";
         default:
             break;
 
