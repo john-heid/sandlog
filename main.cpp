@@ -42,7 +42,7 @@ std::vector<std::string> build_project_list(MenuState curr_state);
 void ensure_directory();
 void write_templates();
 void display_menu(MenuState state, std::vector<std::string> project_list, const std::vector<std::vector<char>>& hourglass);
-void display_path(MenuState state, std::string name);
+void display_path(MenuState state, std::string name, std::string size);
 MenuState create_project(std::string name, std::string size, std::string unit);
 MenuState delete_project(std::string name, std::string confirmation);
 MenuState archive_project(std::string name, std::string confirmation);
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]){
 
         system("cls");
         display_menu(state, project_list, hourglass);
-        display_path(state, name);
+        display_path(state, name, size);
 
         std::getline(std::cin, input);
 
@@ -519,7 +519,7 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     }
 }
 
-void display_path(MenuState state, std::string name){
+void display_path(MenuState state, std::string name, std::string size){
     
     if (name == "startup value"){
         name = "name";
@@ -552,8 +552,8 @@ void display_path(MenuState state, std::string name){
             path =          "[::::][main][create]["+ name +"][";
             break;
         case MenuState::CREATE_UNIT:
-            example_path =  "[::::][main][create]["+ name +"][size][unit name]";
-            path =          "[::::][main][create]["+ name +"][size][";
+            example_path =  "[::::][main][create]["+ name +"]["+size+"][unit name]";
+            path =          "[::::][main][create]["+ name +"]["+size+"][";
             break;
         case MenuState::DELETE_NAME:
             example_path =  "[::::][main][delete][name]";
