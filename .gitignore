@@ -2,3 +2,4 @@ data/
 templates/
 .vscode/
 *.exe
+old/

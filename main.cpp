@@ -99,7 +99,7 @@ int main(int argc, char *argv[]){
                 counter += 1;
                 //system("cls");
                 display_menu(state, project_list, hourglass);
-                std::this_thread::sleep_for(std::chrono::milliseconds(33));
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
             } while (calculate_frame(hourglass, flag_add_dam));
             write_hourglass(state, name, hourglass);
             state = MenuState::MAIN;
