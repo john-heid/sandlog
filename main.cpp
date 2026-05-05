@@ -14,6 +14,8 @@
 #endif
 #include <Windows.h>
 
+static size_t last_num_rows = 0; // Used to cleanup residual rows/text in display_menu when switching from larger to smaller menus/hourglass
+
 // Folder
 static const std::filesystem::path USER_DATA = "data";
 static const std::filesystem::path PROJECTS_ACTIVE = USER_DATA / "projects_active";
@@ -25,6 +27,8 @@ static const std::string FILENAME_PROJECT_LIST = "project_list.txt";
 static const std::string FILENAME_TEMPLATE_100 = "template_100.txt";
 static const std::string FILENAME_TEMPLATE_400 = "template_400.txt";
 static const std::string FILENAME_TEMPLATE_MENU = "template_menu.txt";
+
+
 
 enum class MenuState {
     MAIN,
@@ -61,7 +65,7 @@ void setCursorVisible(bool visible);
 
 int main(int argc, char *argv[]){
     enableAnsi();
-    setCursorVisible(true);
+    setCursorVisible(false);
     MenuState state = MenuState::MAIN;
 
     std::string input;
@@ -80,7 +84,6 @@ int main(int argc, char *argv[]){
         }
         std::vector<std::string> project_list = build_project_list(state);
         if (state == MenuState::PROJECT_DISPLAY){
-            setCursorVisible(false);
             size_t sand_input = std::stoi(size);
             size_t counter = 0;
             bool flag_add_dam = false;
@@ -100,14 +103,14 @@ int main(int argc, char *argv[]){
             } while (calculate_frame(hourglass, flag_add_dam));
             write_hourglass(state, name, hourglass);
             state = MenuState::MAIN;
-            setCursorVisible(true);
         }
 
         //system("cls");
         display_menu(state, project_list, hourglass);
         display_path(state, name, size);
-
+        setCursorVisible(true);
         std::getline(std::cin, input);
+        setCursorVisible(false);
 
         // Creating Global Commands
         if (input == "exit"){
@@ -501,7 +504,10 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     // adds empty vertical elements in preparation to receive padding.
     menu.insert(menu.begin(), vertical_padding, "");
 
+    //frame += "\033[?47h";
     frame += "\033[H";
+    frame += "\033[3J";
+    frame += "\033[J";
 
     for (size_t i = 0; i < num_rows; i++){
         // Menu
@@ -514,21 +520,13 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
         else{
             padding = biggest_length;
         }
+        
 
         // Padding + constant offset
         const size_t offset = 10;
         size_t total_padding_offset = padding + offset;
         frame += std::string(total_padding_offset, ' ');
-        //std::cout << std::string(total_padding_offset, ' ');
 
-        // Project
-        // if (i < hourglass.size()){
-        //     std::string buffer;
-        //     const auto& row = hourglass[i];
-        //     buffer.append(row.begin(), row.end());
-        //     std::cout << buffer;
-        // }
-        // std::cout << '\n';
         if (i < hourglass.size()){
             const auto& row = hourglass[i];
             frame.append(row.begin(), row.end());
@@ -536,12 +534,17 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
         // Erase to end of line, and newline
         frame += "\033[K\n";
     }
+
+    frame += "\033[1;1H"; // move cursor to top left at the end of fwrite.
     fwrite(frame.c_str(), 1, frame.size(), stdout);
     fflush(stdout);
+
+    
+    last_num_rows = num_rows;
+
 }
 
 void display_path(MenuState state, std::string name, std::string size){
-    
     if (name == "startup value"){
         name = "name";
     }
@@ -591,6 +594,8 @@ void display_path(MenuState state, std::string name, std::string size){
             break;
 
     }
+    printf("\033[%zu;1H", last_num_rows + 2); // +2 gives a blank line gap
+    printf("\033[J");  // erase from cursor to end of screen (clears old path residue)
     std::cout << example_path << std::endl;
     std::cout << path;
 }
