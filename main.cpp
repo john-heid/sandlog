@@ -9,6 +9,10 @@
 #include <tuple>
 #include <stdlib.h>
 #include <cctype> // isalphanumeric
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
 
 // Folder
 static const std::filesystem::path USER_DATA = "data";
@@ -51,7 +55,8 @@ std::vector<std::vector<char>> read_hourglass(MenuState state, std::string name)
 bool calculate_frame(std::vector<std::vector<char>>& hourglass, bool flag_dam);
 void remove_dam(std::vector<std::vector<char>>& hourglass);
 MenuState add_hours(std::string size);
-
+void enableAnsi();
+void setCursorVisible(bool visible);
 
 
 int main(int argc, char *argv[]){
@@ -73,6 +78,7 @@ int main(int argc, char *argv[]){
         }
         std::vector<std::string> project_list = build_project_list(state);
         if (state == MenuState::PROJECT_DISPLAY){
+            setCursorVisible(false);
             size_t sand_input = std::stoi(size);
             size_t counter = 0;
             bool flag_add_dam = false;
@@ -92,6 +98,7 @@ int main(int argc, char *argv[]){
             } while (calculate_frame(hourglass, flag_add_dam));
             write_hourglass(state, name, hourglass);
             state = MenuState::MAIN;
+            setCursorVisible(true);
         }
 
         system("cls");
@@ -734,4 +741,14 @@ MenuState add_hours(std::string size){
         }
     }
     return MenuState::PROJECT_DISPLAY;
+}
+
+void enableAnsi(){
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD mode = 0;
+    GetConsoleMode(hOut, &mode);
+    SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+}
+void setCursorVisible(bool visible){
+    printf(visible ? "\033[?25h" : "\033[?25l");
 }
