@@ -60,6 +60,8 @@ void setCursorVisible(bool visible);
 
 
 int main(int argc, char *argv[]){
+    enableAnsi();
+    setCursorVisible(true);
     MenuState state = MenuState::MAIN;
 
     std::string input;
@@ -92,16 +94,16 @@ int main(int argc, char *argv[]){
                     flag_add_dam = true;
                 }
                 counter += 1;
-                system("cls");
+                //system("cls");
                 display_menu(state, project_list, hourglass);
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(33));
             } while (calculate_frame(hourglass, flag_add_dam));
             write_hourglass(state, name, hourglass);
             state = MenuState::MAIN;
             setCursorVisible(true);
         }
 
-        system("cls");
+        //system("cls");
         display_menu(state, project_list, hourglass);
         display_path(state, name, size);
 
@@ -466,6 +468,8 @@ void write_hourglass(MenuState state, std::string name, std::vector<std::vector<
 
 void display_menu(MenuState state, std::vector<std::string> project_list, const std::vector<std::vector<char>>& hourglass){
     std::ifstream infile;
+    std::string frame;
+    frame.reserve(4096);
     // Build menu+projects list
     size_t biggest_length = 0;
     std::vector<std::string> menu;
@@ -489,7 +493,7 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     // Output the display         // For each row it needs menu + offset + project
     size_t num_rows = std::max(menu.size(), hourglass.size());
     // Add the difference of rows as 'padding'  to the front of menu
-    int vertical_padding = hourglass.size() - menu.size();
+    int vertical_padding = (int)hourglass.size() - (int)menu.size();
     if (vertical_padding < 0){
         vertical_padding = -1 * vertical_padding;
     }
@@ -497,13 +501,14 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
     // adds empty vertical elements in preparation to receive padding.
     menu.insert(menu.begin(), vertical_padding, "");
 
-
+    frame += "\033[H";
 
     for (size_t i = 0; i < num_rows; i++){
         // Menu
         size_t padding;
         if (i < menu.size()){
-            std::cout << menu[i];
+            frame += menu[i];
+            // std::cout << menu[i];
             padding = biggest_length - menu[i].length();
         }
         else{
@@ -513,17 +518,26 @@ void display_menu(MenuState state, std::vector<std::string> project_list, const 
         // Padding + constant offset
         const size_t offset = 10;
         size_t total_padding_offset = padding + offset;
-        std::cout << std::string(total_padding_offset, ' ');
+        frame += std::string(total_padding_offset, ' ');
+        //std::cout << std::string(total_padding_offset, ' ');
 
         // Project
+        // if (i < hourglass.size()){
+        //     std::string buffer;
+        //     const auto& row = hourglass[i];
+        //     buffer.append(row.begin(), row.end());
+        //     std::cout << buffer;
+        // }
+        // std::cout << '\n';
         if (i < hourglass.size()){
-            std::string buffer;
             const auto& row = hourglass[i];
-            buffer.append(row.begin(), row.end());
-            std::cout << buffer;
+            frame.append(row.begin(), row.end());
         }
-        std::cout << '\n';
+        // Erase to end of line, and newline
+        frame += "\033[K\n";
     }
+    fwrite(frame.c_str(), 1, frame.size(), stdout);
+    fflush(stdout);
 }
 
 void display_path(MenuState state, std::string name, std::string size){
@@ -749,6 +763,7 @@ void enableAnsi(){
     GetConsoleMode(hOut, &mode);
     SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 }
+
 void setCursorVisible(bool visible){
     printf(visible ? "\033[?25h" : "\033[?25l");
 }
