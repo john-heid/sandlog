@@ -65,6 +65,7 @@ void setCursorVisible(bool visible);
 
 int main(int argc, char *argv[]){
     enableAnsi();
+    printf("\033]0;Sandlog\007"); // Application Title
     setCursorVisible(false);
     MenuState state = MenuState::MAIN;
 
