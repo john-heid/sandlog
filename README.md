@@ -1,5 +1,7 @@
 # Sandlog
  
+![Sandlog](gitassets/Sandlog.gif)
+
 Sandlog is a terminal-based logging tool that visualizes tracked effort as sand falling through an ASCII hourglass. Log any quantity in any unit — hours, sessions, days, reps — and watch the sand fall.
  
 ## Inspiration
